@@ -76,8 +76,15 @@ abstract class BaseDecoder(private val mFilePath: String) : IDecoder {
 
     private var mEndPos = 0L
 
+    /**
+     * 开始解码时间，用于音视频同步
+     */
+    private var mStartTimeForSync = -1L
+
     override fun run() {
-        mState = DecodeState.START
+        if (mState == DecodeState.STOP) {
+            mState = DecodeState.START
+        }
         mStateListener?.decoderPrepare(this)
 
         //【解码步骤：1. 初始化，并启动解码器】
@@ -86,12 +93,20 @@ abstract class BaseDecoder(private val mFilePath: String) : IDecoder {
        while (mIsRunning) {
             if (mState != DecodeState.START && mState != DecodeState.DECODING && mState != DecodeState.SEEKING) {
                 waitDecode()
+
+                // ---------【同步时间矫正】-------------
+                //恢复同步的起始时间，即去除等待流失的时间
+                mStartTimeForSync = System.currentTimeMillis() - getCurTimeStamp()
             }
 
             if (!mIsRunning || mState == DecodeState.STOP) {
                 mIsRunning = false
                 break
             }
+
+           if (mStartTimeForSync == -1L) {
+               mStartTimeForSync = System.currentTimeMillis();
+           }
 
            //如果数据没有解码完毕，将数据推入解码器解码
            if (!mIsEOS) {
@@ -102,6 +117,10 @@ abstract class BaseDecoder(private val mFilePath: String) : IDecoder {
            //【解码步骤：3. 将解码好的数据从缓冲区拉取出来】
            val index = pullBufferFromDecoder()
            if (index >= 0) {
+               // ---------【音视频同步】-------------
+               if (mState == DecodeState.DECODING) {
+                   sleepRender()
+               }
                //【解码步骤：4. 渲染】
                render(mOutputBuffers!![index], mBufferInfo)
                //【解码步骤：5. 释放输出缓冲】
@@ -127,6 +146,18 @@ abstract class BaseDecoder(private val mFilePath: String) : IDecoder {
     override fun goOn() {
         mState = DecodeState.DECODING
         notifyDecode()
+    }
+
+    private fun sleepRender() {
+        val passTime = System.currentTimeMillis() - mStartTimeForSync
+        val curTime = getCurTimeStamp()
+        if (curTime > passTime) {
+            Thread.sleep(curTime - passTime)
+        }
+    }
+
+    private fun getCurTimeStamp(): Long {
+        return mBufferInfo.presentationTimeUs / 1000
     }
 
     private fun release() {

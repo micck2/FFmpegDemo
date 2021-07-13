@@ -1,6 +1,7 @@
 package com.example.ffmpegdemo.mediacodec
 
 import android.os.Bundle
+import android.view.inspector.WindowInspector
 import androidx.appcompat.app.AppCompatActivity
 import com.example.ffmpegdemo.R
 import kotlinx.android.synthetic.main.activity_mediacodec.*
@@ -17,6 +18,8 @@ class MediaCodecActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_mediacodec)
         initPlayer()
+
+        //WindowInspector.getGlobalWindowViews().contains(view)
     }
 
     private fun initPlayer() {
